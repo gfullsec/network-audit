@@ -26,10 +26,13 @@ Bloque 7 — Generación de alertas
 Genera alertas basadas en los cambios detectados. Archivos: alertas/alertas_YYYY-MM-DD_HH-MM-SS.txt y alertas/alertas_YYYY-MM-DD_HH-MM-SS.json. Las alertas incluyen: dispositivos nuevos, dispositivos desaparecidos, puertos nuevos, puertos cerrados, cambios de fabricante y cambios de tipo de escaneo. El TXT incluye secciones como [ALERTA] Nuevo dispositivo: ... El JSON almacena la misma información de forma estructurada.
 
 Bloque 8 — Limpieza inteligente
-Pregunta si se deben limpiar auditorías antiguas. Si se confirma: conserva la auditoría actual, la inmediatamente anterior y la usada para comparación; elimina el resto. Objetivo: ahorrar espacio y mantener solo referencias relevantes.
+Pregunta si se deben limpiar auditorías antiguas. Si se confirma: conserva la auditoría actual, la inmediatamente anterior y la usada para comparación; elimina el resto. Objetivo: ahorrar espacio y mantener solo referencias relevantes. Registra las operaciones de limpieza en cleanup_YYYY-MM-DD_HH-MM-SS.log.
 
-Bloque 9 — Resumen final y cierre
-Imprime un resumen final: ubicación de la auditoría, archivos generados, ruta del log y mensaje de cierre.
+Bloque 9 — Generación de informe técnico
+Genera un informe técnico comprehensivo combinando todos los datos de la auditoría. Crea dos salidas: reports/report_YYYY-MM-DD_HH-MM-SS.txt (legible para humanos) y reports/report_YYYY-MM-DD_HH-MM-SS.json (estructurado). El informe incluye: resumen de todos los archivos generados, lista de dispositivos únicos con fabricantes, inventario de puertos por dispositivo, cambios detectados (dispositivos nuevos/desaparecidos, puertos nuevos/cerrados, cambios de fabricante, cambios de tipo de escaneo), resumen de alertas y resumen de limpieza. Agrega datos de CSV, JSON, cambios, alertas y logs de limpieza.
+
+Bloque 10 — Finalización
+Imprime un resumen final: estado de completación de la auditoría, ubicación de la auditoría, rutas del informe técnico y mensaje de cierre agradeciendo al usuario.
 
 Tecnologías y herramientas utilizadas
 Bash, Nmap, arp-scan, jq, ip, grep, awk, sed, cut, xargs.
@@ -38,17 +41,17 @@ Para qué sirve este script
 Detectar dispositivos activos; determinar fabricantes; identificar puertos abiertos y servicios; documentar infraestructura con CSV/JSON; comparar auditorías; detectar cambios; generar alertas básicas de seguridad.
 
 Estructura final de salida
-~/Documentos/seguridad/auditorias/
+~/.network-audit/audits/
 └── YYYY-MM-DD_HH-MM-SS/
-├── descubrimiento/
-├── fabricantes/
-├── puertos/
+├── discovery/
+├── manufacturers/
+├── ports/
 ├── csv/
 ├── json/
-├── cambios/
-├── alertas/
-├── logs/
-└── resumen_final
+├── changes/
+├── alerts/
+├── reports/
+└── logs/
 
 Limitaciones
 Depende de permisos del sistema/red; requiere nmap, arp-scan y jq; la detección de fabricantes puede ser aproximada; la comparación requiere un JSON previo válido; la detección se basa en cadenas parseadas y heurísticas.
