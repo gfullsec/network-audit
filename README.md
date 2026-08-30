@@ -27,10 +27,13 @@ Compares current audit with a previous one. Actions: lists previous audits; asks
 Generates alerts based on detected changes. Files: alertas/alertas_YYYY-MM-DD_HH-MM-SS.txt and alertas/alertas_YYYY-MM-DD_HH-MM-SS.json. Alerts include: new devices, missing devices, new ports, closed ports, manufacturer changes, scan type changes. TXT includes sections like [ALERT] New device: ... JSON stores structured equivalents.
 
 ### Block 8 — Intelligent Cleanup
-Asks whether to clean old audits. If confirmed: keeps current audit, previous audit, and the one used for comparison; deletes the rest. Goal: save space and keep relevant references.
+Asks whether to clean old audits. If confirmed: keeps current audit, previous audit, and the one used for comparison; deletes the rest. Goal: save space and keep relevant references. Logs cleanup operations in cleanup_YYYY-MM-DD_HH-MM-SS.log.
 
-### Block 9 — Final Summary and Closure
-Prints final summary: audit location, generated files, log path, closing message.
+### Block 9 — Technical Report Generation
+Generates comprehensive technical report combining all audit data. Creates two outputs: reports/report_YYYY-MM-DD_HH-MM-SS.txt (human-readable) and reports/report_YYYY-MM-DD_HH-MM-SS.json (structured). The report includes: summary of all generated files, unique device list with manufacturers, port inventory per device, detected changes (new/missing devices, new/closed ports, manufacturer changes, scan type changes), alerts summary, and cleanup summary. Aggregates data from CSV, JSON, changes, alerts, and cleanup logs.
+
+### Block 10 — Finalization
+Prints final summary: audit completion status, audit location, technical report paths, closing message thanking the user.
 
 ## Technologies and Tools Used
 Bash, Nmap, arp-scan, jq, ip, grep, awk, sed, cut, xargs.
@@ -39,17 +42,17 @@ Bash, Nmap, arp-scan, jq, ip, grep, awk, sed, cut, xargs.
 Detect active devices; determine manufacturers; identify open ports and services; document infrastructure with CSV/JSON; compare audits; detect changes; generate basic security alerts.
 
 ## Final Output Structure
-~/Documentos/seguridad/auditorias/  
+~/.network-audit/audits/  
 └── YYYY-MM-DD_HH-MM-SS/  
-    ├── descubrimiento/  
-    ├── fabricantes/  
-    ├── puertos/  
+    ├── discovery/  
+    ├── manufacturers/  
+    ├── ports/  
     ├── csv/  
     ├── json/  
-    ├── cambios/  
-    ├── alertas/  
-    ├── logs/  
-    └── resumen_final
+    ├── changes/  
+    ├── alerts/  
+    ├── reports/  
+    └── logs/
 
 ## Limitations
 Depends on system/network permissions; requires nmap, arp-scan, jq; manufacturer detection may be approximate; comparison requires valid previous JSON; detection relies on parsed strings and heuristics.

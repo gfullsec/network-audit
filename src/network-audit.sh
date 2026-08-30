@@ -8,7 +8,8 @@
 # 6. Comparison with previous scan
 # 7. Change alerts
 # 8. Cleanup
-# 9. Finalization
+# 9. Technical report generation
+# 10. Finalization
 
 
 #!/bin/bash
@@ -34,6 +35,7 @@ mkdir -p "$OUT/json"
 mkdir -p "$OUT/changes"
 mkdir -p "$OUT/logs"
 mkdir -p "$OUT/alerts"
+mkdir -p "$OUT/reports"
 
 echo "Environment prepared."
 echo "Audit date: $DATE_STAMP"
@@ -607,7 +609,8 @@ echo "{
   \"closedPorts\": $CLOSED_PORTS_JSON,
   \"manufacturerChanges\": $MANUFACTURER_CHANGES_JSON,
   \"scanTypeChanges\": $SCAN_TYPE_CHANGES_JSON
-" > "$CHANGES_JSON"
+}" > "$CHANGES_JSON"
+
 
 echo
 echo "JSON report generated at:"
@@ -753,10 +756,20 @@ echo
 echo "Do you want to clean up old audits? (y/n)"
 read CLEANUP
 
+# Cleanup log path
+CLEANUP_LOG="$OUT/logs/cleanup_$DATE_STAMP.log"
+
+# Start cleanup log
+echo "Cleanup started at: $(date)" > "$CLEANUP_LOG"
+echo "--------------------------------------------------" >> "$CLEANUP_LOG"
+
 if [[ "$CLEANUP" == "y" || "$CLEANUP" == "Y" ]]; then
 
     echo "Performing intelligent cleanup..."
     echo "--------------------------------------------------"
+
+    echo "Performing intelligent cleanup..." >> "$CLEANUP_LOG"
+    echo >> "$CLEANUP_LOG"
 
     BASE="$HOME/.network-audit/audits"
 
@@ -775,12 +788,24 @@ if [[ "$CLEANUP" == "y" || "$CLEANUP" == "Y" ]]; then
     echo "  - Audit used for comparison: $COMPARED_AUDIT"
     echo
 
+    echo "Keeping the following audits:" >> "$CLEANUP_LOG"
+    echo "  - Current audit: $CURRENT" >> "$CLEANUP_LOG"
+    echo "  - Immediately previous audit: $PREVIOUS" >> "$CLEANUP_LOG"
+    echo "  - Audit used for comparison: $COMPARED_AUDIT" >> "$CLEANUP_LOG"
+    echo >> "$CLEANUP_LOG"
+
     for A in $(ls "$BASE"); do
         if [[ "$A" != "$CURRENT" && "$A" != "$PREVIOUS" && "$A" != "$COMPARED_AUDIT" ]]; then
             echo "Removing old audit: $A"
             rm -rf "$BASE/$A"
+
+            echo "Removed old audit: $A" >> "$CLEANUP_LOG"
         fi
     done
+
+    echo >> "$CLEANUP_LOG"
+    echo "Cleanup completed successfully." >> "$CLEANUP_LOG"
+    echo "--------------------------------------------------" >> "$CLEANUP_LOG"
 
     echo
     echo "Cleanup completed."
@@ -789,33 +814,192 @@ if [[ "$CLEANUP" == "y" || "$CLEANUP" == "Y" ]]; then
 else
     echo "Cleanup skipped by user."
     echo "--------------------------------------------------"
+
+    echo "Cleanup skipped by user." >> "$CLEANUP_LOG"
+    echo "--------------------------------------------------" >> "$CLEANUP_LOG"
 fi
 
 # ============================================
-#  BLOCK 9 — FINAL SUMMARY AND CLOSE
+#  BLOQUE 9 — TECHNICAL REPORT GENERATION
+# ============================================
+
+echo
+echo "Generating technical report..."
+
+REPORT_DIR="$OUT/reports"
+
+REPORT_TXT="$REPORT_DIR/report_$DATE_STAMP.txt"
+REPORT_JSON="$REPORT_DIR/report_$DATE_STAMP.json"
+
+CSV_FILE="$OUT/csv/audit_$DATE_STAMP.csv"
+JSON_FILE="$OUT/json/audit_$DATE_STAMP.json"
+CHANGES_JSON="$OUT/changes/changes_$DATE_STAMP.json"
+ALERTS_JSON="$OUT/alerts/alerts_$DATE_STAMP.json"
+CLEANUP_LOG="$OUT/logs/cleanup_$DATE_STAMP.log"
+EXEC_LOG="$OUT/logs/execution_$DATE_STAMP.log"
+
+{
+    echo "=================================================="
+    echo "            NETWORK AUDIT TECHNICAL REPORT"
+    echo "=================================================="
+    echo
+    echo "Audit date: $DATE_STAMP"
+    echo "Audit folder: $OUT"
+    echo
+    echo "--------------------------------------------------"
+    echo " 1. SUMMARY OF GENERATED FILES"
+    echo "--------------------------------------------------"
+    echo "Audit root folder:"
+    echo "  $OUT"
+    echo
+    echo "Folder structure and generated files:"
+    echo
+
+    for DIR in discovery manufacturers ports csv json changes alerts logs reports; do
+        echo "  $DIR/:"
+        if [[ -d "$OUT/$DIR" ]]; then
+            find "$OUT/$DIR" -type f | sed 's/^/    - /'
+        else
+            echo "    (folder not found)"
+        fi
+        echo
+    done
+
+    echo "--------------------------------------------------"
+    echo " 2. DEVICE SUMMARY (unique devices)"
+    echo "--------------------------------------------------"
+    if [[ -f "$CSV_FILE" ]]; then
+        awk -F';' 'NR>1 {print $1 "|" $2}' "$CSV_FILE" | sort -u | while IFS='|' read -r IP MAN; do
+            echo " - $IP ($MAN)"
+        done
+    else
+        echo "CSV file not found."
+    fi
+    echo
+    echo "--------------------------------------------------"
+    echo " 3. PORT SUMMARY (per device)"
+    echo "--------------------------------------------------"
+    if [[ -f "$JSON_FILE" ]]; then
+        jq -r '
+            to_entries[] |
+            .key as $ip |
+            "Device: " + $ip,
+            ( .value.ports // [] | map("   - " + (.port|tostring))[] ),
+            ""
+        ' "$JSON_FILE"
+    else
+        echo "JSON file not found."
+    fi
+    echo
+    echo "--------------------------------------------------"
+    echo " 4. CHANGES DETECTED"
+    echo "--------------------------------------------------"
+    jq -r '
+        "New devices:",
+        (.newDevices[]? | " - " + .),
+        "",
+        "Missing devices:",
+        (.missingDevices[]? | " - " + .),
+        "",
+        "New ports:",
+        (.newPorts[]? | " - " + .ip + ": " + (.port|tostring)),
+        "",
+        "Closed ports:",
+        (.closedPorts[]? | " - " + .ip + ": " + (.port|tostring)),
+        "",
+        "Manufacturer changes:",
+        (.manufacturerChanges[]? | " - " + .ip + ": " + .before + " -> " + .after),
+        "",
+        "Scan type changes:",
+        (.scanTypeChanges[]? | " - " + .ip + ": " + .before + " -> " + .after)
+    ' "$CHANGES_JSON"
+    echo
+    echo "--------------------------------------------------"
+    echo " 5. ALERTS"
+    echo "--------------------------------------------------"
+    jq -r '
+        "New devices alerts:",
+        (.newDevices[]? | " - " + .),
+        "",
+        "Missing devices alerts:",
+        (.missingDevices[]? | " - " + .),
+        "",
+        "New ports alerts:",
+        (.newPorts[]? | " - " + .ip + ": " + (.port|tostring)),
+        "",
+        "Closed ports alerts:",
+        (.closedPorts[]? | " - " + .ip + ": " + (.port|tostring)),
+        "",
+        "Manufacturer change alerts:",
+        (.manufacturerChanges[]? | " - " + .ip + ": " + .before + " -> " + .after),
+        "",
+        "Scan type change alerts:",
+        (.scanTypeChanges[]? | " - " + .ip + ": " + .before + " -> " + .after)
+    ' "$ALERTS_JSON"
+    echo
+    echo "--------------------------------------------------"
+    echo " 6. CLEANUP SUMMARY"
+    echo "--------------------------------------------------"
+    cat "$CLEANUP_LOG"
+    echo
+    echo "=================================================="
+    echo "            END OF TECHNICAL REPORT"
+    echo "=================================================="
+} > "$REPORT_TXT"
+
+# --------------------------------------------
+# Generate JSON report
+# --------------------------------------------
+jq -n \
+    --arg date "$DATE_STAMP" \
+    --arg folder "$OUT" \
+    --arg csv "$CSV_FILE" \
+    --arg json "$JSON_FILE" \
+    --arg changes "$CHANGES_JSON" \
+    --arg alerts "$ALERTS_JSON" \
+    --arg cleanup "$CLEANUP_LOG" \
+    --arg exec "$EXEC_LOG" \
+    --argjson devices "$(jq '.' "$JSON_FILE")" \
+    '
+    {
+        audit_date: $date,
+        audit_folder: $folder,
+        files: {
+            csv: $csv,
+            json: $json,
+            changes_json: $changes,
+            alerts_json: $alerts,
+            cleanup_log: $cleanup,
+            execution_log: $exec
+        },
+        devices: $devices
+    }
+    ' > "$REPORT_JSON"
+
+echo "Technical report generated:"
+echo " - TXT:  $REPORT_TXT"
+echo " - JSON: $REPORT_JSON"
+echo
+
+# ============================================
+#  BLOQUE 10 — FINALIZATION
 # ============================================
 
 echo
 echo "=================================================="
-echo "              AUDIT COMPLETED"
+echo "              AUDIT COMPLETED SUCCESSFULLY"
 echo "=================================================="
 echo
-
-echo "Audit location:"
+echo "Audit folder:"
 echo "  $OUT"
 echo
-
-echo "Generated files:"
-echo "  - CSV:                $OUT/csv/audit_$DATE_STAMP.csv"
-echo "  - JSON:               $OUT/json/audit_$DATE_STAMP.json"
-echo "  - Changes (JSON):     $OUT/changes/changes_$DATE_STAMP.json"
-echo "  - Changes (TXT):      $OUT/changes/changes_$DATE_STAMP.txt"
-echo "  - Alerts (JSON):      $OUT/alerts/alerts_$DATE_STAMP.json"
-echo "  - Alerts (TXT):       $OUT/alerts/alerts_$DATE_STAMP.txt"
-echo "  - Execution log:      $OUT/logs/execution_$DATE_STAMP.log"
+echo "Technical report generated:"
+echo "  - TXT:  $REPORT_TXT"
+echo "  - JSON: $REPORT_JSON"
 echo
-
-echo "You can review the log to see all the steps performed."
+echo "All audit data has been processed, compared, analyzed,"
+echo "cleaned, and summarized in the final technical report."
+echo
 echo "Thank you for using the automatic audit system."
 echo "=================================================="
 echo
