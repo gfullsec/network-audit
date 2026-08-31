@@ -19,19 +19,22 @@ Convierte los resultados del escaneo de puertos en un archivo CSV: csv/auditoria
 Bloque 5 — Generación de JSON (Agrupado por IP)
 Crea json/auditoria_YYYY-MM-DD_HH-MM-SS.json. Cada entrada por IP incluye fabricante, scanType, fecha y puertos. Ejemplo: {"192.168.1.10":{"manufacturer":"Dell","scanType":"deep","date":"2026-08-29_20-28-46","ports":[{"port":22,"service":"ssh","state":"open"}]}}. Lógica: leer CSV; limpiar campos; crear entrada de IP si no existe; añadir puertos.
 
-Bloque 6 — Comparación con auditorías anteriores
+Bloque 6 — Generación de diagrama Mermaid
+Este bloque genera un diagrama visual de la topología de red. Acciones: lee el archivo JSON de la auditoría; detecta automáticamente la IP del router usando `ip route`; crea un diagrama Mermaid (formato graph TD) con el router como nodo central; itera sobre todos los dispositivos del JSON de auditoría; recupera la IP, dirección MAC, fabricante y puertos abiertos de cada dispositivo; crea un nodo para cada dispositivo con información completa; conecta todos los nodos al router mediante flechas; genera el diagrama en diagrams/network_logical_YYYY-MM-DD_HH-MM-SS.mmd. El diagrama proporciona una representación visual de la topología de red y las relaciones entre dispositivos.
+
+Bloque 7 — Comparación con auditorías anteriores
 Compara la auditoría actual con una previa. Acciones: lista auditorías anteriores; solicita al usuario seleccionar una; comprueba si contiene JSON válido; compara dispositivos nuevos, dispositivos desaparecidos, puertos nuevos, puertos cerrados, cambios de fabricante y cambios de tipo de escaneo. Resultados en cambios/cambios_YYYY-MM-DD_HH-MM-SS.txt y cambios/cambios_YYYY-MM-DD_HH-MM-SS.json.
 
-Bloque 7 — Generación de alertas
+Bloque 8 — Generación de alertas
 Genera alertas basadas en los cambios detectados. Archivos: alertas/alertas_YYYY-MM-DD_HH-MM-SS.txt y alertas/alertas_YYYY-MM-DD_HH-MM-SS.json. Las alertas incluyen: dispositivos nuevos, dispositivos desaparecidos, puertos nuevos, puertos cerrados, cambios de fabricante y cambios de tipo de escaneo. El TXT incluye secciones como [ALERTA] Nuevo dispositivo: ... El JSON almacena la misma información de forma estructurada.
 
-Bloque 8 — Limpieza inteligente
+Bloque 9 — Limpieza inteligente
 Pregunta si se deben limpiar auditorías antiguas. Si se confirma: conserva la auditoría actual, la inmediatamente anterior y la usada para comparación; elimina el resto. Objetivo: ahorrar espacio y mantener solo referencias relevantes. Registra las operaciones de limpieza en cleanup_YYYY-MM-DD_HH-MM-SS.log.
 
-Bloque 9 — Generación de informe técnico
+Bloque 10 — Generación de informe técnico
 Genera un informe técnico comprehensivo combinando todos los datos de la auditoría. Crea dos salidas: reports/report_YYYY-MM-DD_HH-MM-SS.txt (legible para humanos) y reports/report_YYYY-MM-DD_HH-MM-SS.json (estructurado). El informe incluye: resumen de todos los archivos generados, lista de dispositivos únicos con fabricantes, inventario de puertos por dispositivo, cambios detectados (dispositivos nuevos/desaparecidos, puertos nuevos/cerrados, cambios de fabricante, cambios de tipo de escaneo), resumen de alertas y resumen de limpieza. Agrega datos de CSV, JSON, cambios, alertas y logs de limpieza.
 
-Bloque 10 — Finalización
+Bloque 11 — Finalización
 Imprime un resumen final: estado de completación de la auditoría, ubicación de la auditoría, rutas del informe técnico y mensaje de cierre agradeciendo al usuario.
 
 Tecnologías y herramientas utilizadas
@@ -51,7 +54,9 @@ Estructura final de salida
 ├── changes/
 ├── alerts/
 ├── reports/
-└── logs/
+├── logs/
+└── diagrams/
+
 
 Limitaciones
 Depende de permisos del sistema/red; requiere nmap, arp-scan y jq; la detección de fabricantes puede ser aproximada; la comparación requiere un JSON previo válido; la detección se basa en cadenas parseadas y heurísticas.

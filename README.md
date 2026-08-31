@@ -20,19 +20,22 @@ Converts port scan results into a CSV file: csv/auditoria_YYYY-MM-DD_HH-MM-SS.cs
 ### Block 5 — JSON Generation (Grouped by IP)
 Creates json/auditoria_YYYY-MM-DD_HH-MM-SS.json. Each IP entry includes manufacturer, scanType, date, ports. Example: {"192.168.1.10":{"manufacturer":"Dell","scanType":"deep","date":"2026-08-29_20-28-46","ports":[{"port":22,"service":"ssh","state":"open"}]}}. Logic: read CSV; clean fields; create IP entry if missing; append ports.
 
-### Block 6 — Comparison with Previous Audits
+### Block 6 — Mermaid Diagram Generation
+This block generates a visual network topology diagram. Actions: reads the audit JSON file; detects the router IP automatically using `ip route`; creates a Mermaid diagram (graph TD format) with the router as the central node; iterates over all devices from the audit JSON; retrieves each device's IP, MAC address, manufacturer, and open ports; creates a node for each device with complete information; connects all nodes to the router via arrows; outputs the diagram to diagrams/network_logical_YYYY-MM-DD_HH-MM-SS.mmd. The diagram provides a visual representation of the network topology and device relationships.
+
+### Block 7 — Comparison with Previous Audits
 Compares current audit with a previous one. Actions: lists previous audits; asks user to select one; checks JSON validity; compares new devices, missing devices, new ports, closed ports, manufacturer changes, scan type changes. Results stored in cambios/cambios_YYYY-MM-DD_HH-MM-SS.txt and cambios/cambios_YYYY-MM-DD_HH-MM-SS.json.
 
-### Block 7 — Alert Generation
+### Block 8 — Alert Generation
 Generates alerts based on detected changes. Files: alertas/alertas_YYYY-MM-DD_HH-MM-SS.txt and alertas/alertas_YYYY-MM-DD_HH-MM-SS.json. Alerts include: new devices, missing devices, new ports, closed ports, manufacturer changes, scan type changes. TXT includes sections like [ALERT] New device: ... JSON stores structured equivalents.
 
-### Block 8 — Intelligent Cleanup
+### Block 9 — Intelligent Cleanup
 Asks whether to clean old audits. If confirmed: keeps current audit, previous audit, and the one used for comparison; deletes the rest. Goal: save space and keep relevant references. Logs cleanup operations in cleanup_YYYY-MM-DD_HH-MM-SS.log.
 
-### Block 9 — Technical Report Generation
+### Block 10 — Technical Report Generation
 Generates comprehensive technical report combining all audit data. Creates two outputs: reports/report_YYYY-MM-DD_HH-MM-SS.txt (human-readable) and reports/report_YYYY-MM-DD_HH-MM-SS.json (structured). The report includes: summary of all generated files, unique device list with manufacturers, port inventory per device, detected changes (new/missing devices, new/closed ports, manufacturer changes, scan type changes), alerts summary, and cleanup summary. Aggregates data from CSV, JSON, changes, alerts, and cleanup logs.
 
-### Block 10 — Finalization
+### Block 11 — Finalization
 Prints final summary: audit completion status, audit location, technical report paths, closing message thanking the user.
 
 ## Technologies and Tools Used
@@ -52,7 +55,8 @@ Detect active devices; determine manufacturers; identify open ports and services
     ├── changes/  
     ├── alerts/  
     ├── reports/  
-    └── logs/
+    ├── logs/
+    └── diagrams/
 
 ## Limitations
 Depends on system/network permissions; requires nmap, arp-scan, jq; manufacturer detection may be approximate; comparison requires valid previous JSON; detection relies on parsed strings and heuristics.
