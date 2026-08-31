@@ -927,53 +927,6 @@ get_mac_manufacturer() {
 }
 
 # --------------------------------------------
-# Build folder tree array (safe JSON)
-# --------------------------------------------
-FOLDER_TREE_JSON=$(jq -n '{}')
-
-for DIR in discovery manufacturers ports csv json changes alerts logs reports; do
-    if [[ -d "$OUT/$DIR" ]]; then
-        FILES=$(find "$OUT/$DIR" -type f | jq -R . | jq -s .)
-    else
-        FILES="[]"
-    fi
-    FOLDER_TREE_JSON=$(echo "$FOLDER_TREE_JSON" | jq --arg dir "$DIR" --argjson files "$FILES" '.[$dir] = $files')
-done
-
-# --------------------------------------------
-# Build device list array (safe JSON)
-# --------------------------------------------
-DEVICE_LIST_JSON=$(jq -n '[]')
-
-for IP in $(jq -r 'keys[]' "$JSON_FILE" | sort); do
-    INFO=$(get_mac_manufacturer "$IP")
-    MAC=$(echo "$INFO" | cut -d'|' -f1)
-    MAN=$(echo "$INFO" | cut -d'|' -f2)
-
-    DEVICE_LIST_JSON=$(echo "$DEVICE_LIST_JSON" | jq \
-        --arg ip "$IP" \
-        --arg mac "$MAC" \
-        --arg man "$MAN" \
-        '. += [{ip:$ip, mac:$mac, manufacturer:$man}]')
-done
-
-# --------------------------------------------
-# Build port summary array (safe JSON)
-# --------------------------------------------
-PORT_SUMMARY_JSON=$(jq '
-    to_entries |
-    map({
-        ip: .key,
-        ports: (.value.ports // [] | map(.port))
-    })
-' "$JSON_FILE")
-
-# --------------------------------------------
-# Cleanup summary (safe JSON string)
-# --------------------------------------------
-CLEANUP_SUMMARY_JSON=$(jq -Rs . < "$CLEANUP_LOG")
-
-# --------------------------------------------
 # Generate TXT report
 # --------------------------------------------
 {
@@ -993,7 +946,7 @@ CLEANUP_SUMMARY_JSON=$(jq -Rs . < "$CLEANUP_LOG")
     echo "Folder structure and generated files:"
     echo
 
-    for DIR in discovery manufacturers ports csv json changes alerts logs reports; do
+    for DIR in discovery manufacturers ports csv json changes alerts logs reports diagrams; do
         echo "  $DIR/:"
         if [[ -d "$OUT/$DIR" ]]; then
             find "$OUT/$DIR" -type f | sed 's/^/    - /'
@@ -1087,12 +1040,58 @@ CLEANUP_SUMMARY_JSON=$(jq -Rs . < "$CLEANUP_LOG")
 } > "$REPORT_TXT"
 
 # --------------------------------------------
+# Build folder tree array AFTER generating TXT + JSON
+# --------------------------------------------
+FOLDER_TREE_JSON=$(jq -n '{}')
+
+for DIR in discovery manufacturers ports csv json changes alerts logs reports diagrams; do
+    if [[ -d "$OUT/$DIR" ]]; then
+        FILES=$(find "$OUT/$DIR" -type f | jq -R . | jq -s .)
+    else
+        FILES="[]"
+    fi
+    FOLDER_TREE_JSON=$(echo "$FOLDER_TREE_JSON" | jq --arg dir "$DIR" --argjson files "$FILES" '.[$dir] = $files')
+done
+
+# --------------------------------------------
+# Build device list array (safe JSON)
+# --------------------------------------------
+DEVICE_LIST_JSON=$(jq -n '[]')
+
+for IP in $(jq -r 'keys[]' "$JSON_FILE" | sort); do
+    INFO=$(get_mac_manufacturer "$IP")
+    MAC=$(echo "$INFO" | cut -d'|' -f1)
+    MAN=$(echo "$INFO" | cut -d'|' -f2)
+
+    DEVICE_LIST_JSON=$(echo "$DEVICE_LIST_JSON" | jq \
+        --arg ip "$IP" \
+        --arg mac "$MAC" \
+        --arg man "$MAN" \
+        '. += [{ip:$ip, mac:$mac, manufacturer:$man}]')
+done
+
+# --------------------------------------------
+# Build port summary array (safe JSON)
+# --------------------------------------------
+PORT_SUMMARY_JSON=$(jq '
+    to_entries |
+    map({
+        ip: .key,
+        ports: (.value.ports // [] | map(.port))
+    })
+' "$JSON_FILE")
+
+# --------------------------------------------
+# Cleanup summary (safe JSON string)
+# --------------------------------------------
+CLEANUP_SUMMARY_JSON=$(jq -Rs . < "$CLEANUP_LOG")
+
+# --------------------------------------------
 # Generate JSON report (safe, structured)
 # --------------------------------------------
 jq -n \
     --arg date "$DATE_STAMP" \
     --arg folder "$OUT" \
-    --argjson files "$(jq -n "{csv:\"$CSV_FILE\", json:\"$JSON_FILE\", changes:\"$CHANGES_JSON\", alerts:\"$ALERTS_JSON\", cleanup:\"$CLEANUP_LOG\", execution:\"$EXEC_LOG\"}")" \
     --argjson folder_tree "$FOLDER_TREE_JSON" \
     --argjson devices "$DEVICE_LIST_JSON" \
     --argjson ports "$PORT_SUMMARY_JSON" \
@@ -1103,7 +1102,6 @@ jq -n \
     {
         audit_date: $date,
         audit_folder: $folder,
-        files: $files,
         folder_tree: $folder_tree,
         devices: $devices,
         ports: $ports,
@@ -1118,6 +1116,243 @@ echo " - TXT:  $REPORT_TXT"
 echo " - JSON: $REPORT_JSON"
 echo
 
+# ============================================
+#  BLOQUE 10 — TECHNICAL REPORT GENERATION
+# ============================================
+
+echo
+echo "Generating technical report..."
+
+REPORT_DIR="$OUT/reports"
+
+REPORT_TXT="$REPORT_DIR/report_$DATE_STAMP.txt"
+REPORT_JSON="$REPORT_DIR/report_$DATE_STAMP.json"
+
+CSV_FILE="$OUT/csv/audit_$DATE_STAMP.csv"
+JSON_FILE="$OUT/json/audit_$DATE_STAMP.json"
+CHANGES_JSON="$OUT/changes/changes_$DATE_STAMP.json"
+ALERTS_JSON="$OUT/alerts/alerts_$DATE_STAMP.json"
+CLEANUP_LOG="$OUT/logs/cleanup_$DATE_STAMP.log"
+EXEC_LOG="$OUT/logs/execution_$DATE_STAMP.log"
+
+MANUFACTURERS_FILE="$OUT/manufacturers/manufacturers_$DATE_STAMP.txt"
+
+# --------------------------------------------
+# Helper: get MAC + manufacturer
+# --------------------------------------------
+get_mac_manufacturer() {
+    local ip="$1"
+    local info
+    info=$(awk -v ip="$ip" -F'\t' '$1 == ip {print $2 "|" $3}' "$MANUFACTURERS_FILE")
+    local mac=$(echo "$info" | cut -d'|' -f1)
+    local man=$(echo "$info" | cut -d'|' -f2)
+    mac=${mac:-"Unknown"}
+    man=${man:-"Unknown"}
+    echo "$mac|$man"
+}
+
+# --------------------------------------------
+# Generate TXT report
+# --------------------------------------------
+{
+    echo "=================================================="
+    echo "            NETWORK AUDIT TECHNICAL REPORT"
+    echo "=================================================="
+    echo
+    echo "Audit date: $DATE_STAMP"
+    echo "Audit folder: $OUT"
+    echo
+    echo "--------------------------------------------------"
+    echo " 1. SUMMARY OF GENERATED FILES"
+    echo "--------------------------------------------------"
+    echo "Audit root folder:"
+    echo "  $OUT"
+    echo
+    echo "Folder structure and generated files:"
+    echo
+
+    for DIR in discovery manufacturers ports csv json changes alerts logs reports diagrams; do
+        echo "  $DIR/:"
+        if [[ -d "$OUT/$DIR" ]]; then
+            find "$OUT/$DIR" -type f | sed 's/^/    - /'
+        else
+            echo "    (folder not found)"
+        fi
+        echo
+    done
+
+    echo "--------------------------------------------------"
+    echo " 2. DEVICE SUMMARY (unique devices with MAC)"
+    echo "--------------------------------------------------"
+
+    jq -r 'keys[]' "$JSON_FILE" | sort | while read -r IP; do
+        INFO=$(get_mac_manufacturer "$IP")
+        MAC=$(echo "$INFO" | cut -d'|' -f1)
+        MAN=$(echo "$INFO" | cut -d'|' -f2)
+        echo " - $IP ($MAN) [$MAC]"
+    done
+
+    echo
+    echo "--------------------------------------------------"
+    echo " 3. PORT SUMMARY (per device)"
+    echo "--------------------------------------------------"
+
+    jq -r '
+        to_entries[] |
+        .key as $ip |
+        "Device: " + $ip,
+        ( .value.ports // [] | map("   - " + (.port|tostring))[] ),
+        ""
+    ' "$JSON_FILE"
+
+    echo
+    echo "--------------------------------------------------"
+    echo " 4. CHANGES DETECTED"
+    echo "--------------------------------------------------"
+    jq -r '
+        "New devices:",
+        (.newDevices[]? | " - " + .),
+        "",
+        "Missing devices:",
+        (.missingDevices[]? | " - " + .),
+        "",
+        "New ports:",
+        (.newPorts[]? | " - " + .ip + ": " + (.port|tostring)),
+        "",
+        "Closed ports:",
+        (.closedPorts[]? | " - " + .ip + ": " + (.port|tostring)),
+        "",
+        "Manufacturer changes:",
+        (.manufacturerChanges[]? | " - " + .ip + ": " + .before + " -> " + .after),
+        "",
+        "Scan type changes:",
+        (.scanTypeChanges[]? | " - " + .ip + ": " + .before + " -> " + .after)
+    ' "$CHANGES_JSON"
+
+    echo
+    echo "--------------------------------------------------"
+    echo " 5. ALERTS"
+    echo "--------------------------------------------------"
+    jq -r '
+        "New devices alerts:",
+        (.newDevices[]? | " - " + .),
+        "",
+        "Missing devices alerts:",
+        (.missingDevices[]? | " - " + .),
+        "",
+        "New ports alerts:",
+        (.newPorts[]? | " - " + .ip + ": " + (.port|tostring)),
+        "",
+        "Closed ports alerts:",
+        (.closedPorts[]? | " - " + .ip + ": " + (.port|tostring)),
+        "",
+        "Manufacturer change alerts:",
+        (.manufacturerChanges[]? | " - " + .ip + ": " + .before + " -> " + .after),
+        "",
+        "Scan type change alerts:",
+        (.scanTypeChanges[]? | " - " + .ip + ": " + .before + " -> " + .after)
+    ' "$ALERTS_JSON"
+
+    echo
+    echo "--------------------------------------------------"
+    echo " 6. CLEANUP SUMMARY"
+    echo "--------------------------------------------------"
+    cat "$CLEANUP_LOG"
+    echo
+    echo "=================================================="
+    echo "            END OF TECHNICAL REPORT"
+    echo "=================================================="
+} > "$REPORT_TXT"
+
+# --------------------------------------------
+# Generate JSON report (first pass)
+# --------------------------------------------
+jq -n \
+    --arg date "$DATE_STAMP" \
+    --arg folder "$OUT" \
+    '
+    {
+        audit_date: $date,
+        audit_folder: $folder
+    }
+    ' > "$REPORT_JSON"
+
+# --------------------------------------------
+# Build folder tree AFTER generating TXT + JSON
+# --------------------------------------------
+FOLDER_TREE_JSON=$(jq -n '{}')
+
+for DIR in discovery manufacturers ports csv json changes alerts logs reports diagrams; do
+    if [[ -d "$OUT/$DIR" ]]; then
+        FILES=$(find "$OUT/$DIR" -type f | jq -R . | jq -s .)
+    else
+        FILES="[]"
+    fi
+    FOLDER_TREE_JSON=$(echo "$FOLDER_TREE_JSON" | jq --arg dir "$DIR" --argjson files "$FILES" '.[$dir] = $files')
+done
+
+# --------------------------------------------
+# Build device list array
+# --------------------------------------------
+DEVICE_LIST_JSON=$(jq -n '[]')
+
+for IP in $(jq -r 'keys[]' "$JSON_FILE" | sort); do
+    INFO=$(get_mac_manufacturer "$IP")
+    MAC=$(echo "$INFO" | cut -d'|' -f1)
+    MAN=$(echo "$INFO" | cut -d'|' -f2)
+
+    DEVICE_LIST_JSON=$(echo "$DEVICE_LIST_JSON" | jq \
+        --arg ip "$IP" \
+        --arg mac "$MAC" \
+        --arg man "$MAN" \
+        '. += [{ip:$ip, mac:$mac, manufacturer:$man}]')
+done
+
+# --------------------------------------------
+# Build port summary array
+# --------------------------------------------
+PORT_SUMMARY_JSON=$(jq '
+    to_entries |
+    map({
+        ip: .key,
+        ports: (.value.ports // [] | map(.port))
+    })
+' "$JSON_FILE")
+
+# --------------------------------------------
+# Cleanup summary
+# --------------------------------------------
+CLEANUP_SUMMARY_JSON=$(jq -Rs . < "$CLEANUP_LOG")
+
+# --------------------------------------------
+# Final JSON report (complete)
+# --------------------------------------------
+jq -n \
+    --arg date "$DATE_STAMP" \
+    --arg folder "$OUT" \
+    --argjson folder_tree "$FOLDER_TREE_JSON" \
+    --argjson devices "$DEVICE_LIST_JSON" \
+    --argjson ports "$PORT_SUMMARY_JSON" \
+    --argjson changes "$(jq '.' "$CHANGES_JSON")" \
+    --argjson alerts "$(jq '.' "$ALERTS_JSON")" \
+    --argjson cleanup "$CLEANUP_SUMMARY_JSON" \
+    '
+    {
+        audit_date: $date,
+        audit_folder: $folder,
+        folder_tree: $folder_tree,
+        devices: $devices,
+        ports: $ports,
+        changes: $changes,
+        alerts: $alerts,
+        cleanup_summary: $cleanup
+    }
+    ' > "$REPORT_JSON"
+
+echo "Technical report generated:"
+echo " - TXT:  $REPORT_TXT"
+echo " - JSON: $REPORT_JSON"
+echo
 
 # ============================================
 #  BLOQUE 11 — FINALIZATION
