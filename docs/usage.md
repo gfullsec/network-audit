@@ -215,6 +215,3 @@ Each audit contains the following folders:
 
 ```
 
----
-
-Si quieres, ahora seguimos con el siguiente punto del plan del día.
