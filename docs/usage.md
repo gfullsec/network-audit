@@ -213,5 +213,3 @@ Each audit contains the following folders:
 - **ports/** → port scan results  
 - **reports/** → technical report  
 
-```
-
