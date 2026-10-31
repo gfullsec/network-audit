@@ -6,28 +6,28 @@ network-audit.sh automatiza una auditoría de seguridad en un entorno de red loc
 ## Qué hace el script, bloque por bloque
 
 ### Block 1 — Preparación del entorno
-Este bloque prepara la estructura de trabajo para la auditoría actual. Acciones: crea el directorio base de auditorías en $HOME/Documentos/seguridad/auditorias; crea una carpeta específica para la auditoría actual usando la fecha y hora; genera subdirectorios para descubrimiento, fabricantes, puertos, csv, json, cambios, logs, alerts. También imprime la fecha y la ruta de la auditoría en curso.
+Este bloque prepara la estructura de trabajo para la auditoría actual. Acciones: crea el directorio base de auditorías en `$HOME/.network-audit/audits`; crea una carpeta específica para la auditoría actual usando la fecha y hora; genera subdirectorios `discovery/`, `manufacturers/`, `ports/`, `csv/`, `json/`, `changes/`, `logs/`, `alerts/`, `reports/` y `diagrams/`. También imprime la fecha y la ruta de la auditoría en curso.
 
 ### Block 2 — Descubrimiento de red + fabricantes
-Este bloque realiza el reconocimiento inicial de la red. Pasos: muestra las interfaces IPv4 activas; solicita al usuario que seleccione una; calcula la red asociada; permite confirmarla o introducir otra manualmente; ejecuta un escaneo de hosts con Nmap usando: nmap -sn -PR "$NETWORK" -oN "$DESC_FILE". Luego usa arp-scan para detectar dispositivos activos y relacionar IPs con direcciones MAC y fabricantes: sudo arp-scan --interface="$IFACE" "$NETWORK". Los resultados se procesan para obtener IP → MAC(s) y IP+MAC → fabricante. Se prioriza una MAC/fabricante por IP. El resultado final se guarda en fabricantes/fabricantes_YYYY-MM-DD_HH-MM-SS.txt.
+Este bloque realiza el reconocimiento inicial de la red. Pasos: muestra las interfaces IPv4 activas; solicita al usuario que seleccione una; calcula la red asociada y permite confirmarla o introducir otra manualmente; detecta dispositivos activos y relaciona IPs con direcciones MAC y fabricantes. Se prioriza una MAC/fabricante por IP. Los resultados del descubrimiento se guardan en `discovery/discovery_YYYY-MM-DD_HH-MM-SS.txt` y los datos de fabricantes en `manufacturers/manufacturers_YYYY-MM-DD_HH-MM-SS.txt`.
 
 ### Block 3 — Escaneo de puertos
-Este bloque procesa los hosts detectados y decide si ejecutar un escaneo rápido o profundo. Lógica: lee las IPs del descubrimiento; busca el fabricante; decide el tipo de escaneo; ejecuta un escaneo rápido (nmap -Pn --top-ports 100) o profundo (nmap -A -p-). Los resultados se guardan en puertos/<fecha>/ con un archivo por IP.
+Este bloque procesa los hosts detectados y decide si ejecutar un escaneo rápido o profundo. Lógica: lee las IPs del descubrimiento; busca el fabricante; decide el tipo de escaneo; ejecuta un escaneo rápido (`nmap -Pn --top-ports 100`) o profundo (`nmap -A -p-`). Los resultados se guardan en `ports/YYYY-MM-DD_HH-MM-SS/` con un archivo por IP.
 
 ### Block 4 — Generación de CSV
-Convierte los resultados del escaneo de puertos en un archivo CSV: csv/auditoria_YYYY-MM-DD_HH-MM-SS.csv. Cabecera: "IP";"Manufacturer";"Port";"Service";"State";"ScanType";"Date". Para cada archivo de puertos: extrae la IP; busca el fabricante; normaliza el nombre; identifica el tipo de escaneo; incluye solo estados válidos (open, closed, filtered); genera una fila por puerto. Si no hay puertos válidos, escribe N/A y no_open_ports.
+Convierte los resultados del escaneo de puertos en `csv/audit_YYYY-MM-DD_HH-MM-SS.csv`. Cabecera: "IP";"Manufacturer";"Port";"Service";"State";"ScanType";"Date". Para cada archivo de puertos: extrae la IP; busca el fabricante; normaliza el nombre; identifica el tipo de escaneo; incluye solo estados válidos (open, closed, filtered); genera una fila por puerto. Si no hay puertos válidos, escribe N/A y no_open_ports.
 
 ### Block 5 — Generación de JSON (agrupado por IP)
-Crea json/auditoria_YYYY-MM-DD_HH-MM-SS.json. Cada entrada por IP incluye fabricante, scanType, fecha y puertos. Ejemplo: {"192.168.1.10":{"manufacturer":"Dell","scanType":"deep","date":"2026-08-29_20-28-46","ports":[{"port":22,"service":"ssh","state":"open"}]}}. Lógica: leer CSV; limpiar campos; crear entrada de IP si no existe; añadir puertos.
+Crea `json/audit_YYYY-MM-DD_HH-MM-SS.json`. Cada entrada por IP incluye fabricante, scanType, fecha y puertos. Ejemplo: {"192.168.1.10":{"manufacturer":"Dell","scanType":"deep","date":"2026-08-29_20-28-46","ports":[{"port":22,"service":"ssh","state":"open"}]}}. Lógica: leer CSV; limpiar campos; crear entrada de IP si no existe; añadir puertos.
 
 ### Block 6 — Generación de diagrama Mermaid
-Este bloque genera un diagrama visual de la topología de red. Acciones: lee el archivo JSON de la auditoría; detecta automáticamente la IP del router usando `ip route`; crea un diagrama Mermaid (formato graph TD) con el router como nodo central; itera sobre todos los dispositivos del JSON de auditoría; recupera la IP, dirección MAC, fabricante y puertos abiertos de cada dispositivo; crea un nodo para cada dispositivo con información completa; conecta todos los nodos al router mediante flechas; genera el diagrama en diagrams/network_logical_YYYY-MM-DD_HH-MM-SS.mmd. El diagrama proporciona una representación visual de la topología de red y las relaciones entre dispositivos.
+Este bloque genera un diagrama visual de la topología de red. Acciones: lee el archivo JSON de la auditoría; detecta automáticamente la IP del router usando `ip route`; crea un diagrama Mermaid (formato graph TD) con el router como nodo central; itera sobre todos los dispositivos del JSON de auditoría; recupera la IP, dirección MAC, fabricante y puertos abiertos de cada dispositivo; crea un nodo para cada dispositivo con información completa; conecta todos los nodos al router mediante flechas; genera el diagrama en `diagrams/network_logical_YYYY-MM-DD_HH-MM-SS.mmd`. El diagrama proporciona una representación visual de la topología de red y las relaciones entre dispositivos.
 
 ### Block 7 — Comparación con auditorías anteriores
-Compara la auditoría actual con una previa. Acciones: lista auditorías anteriores; solicita al usuario seleccionar una; comprueba si contiene JSON válido; compara dispositivos nuevos, dispositivos desaparecidos, puertos nuevos, puertos cerrados, cambios de fabricante y cambios de tipo de escaneo. Resultados almacenados en cambios/cambios_YYYY-MM-DD_HH-MM-SS.txt y cambios/cambios_YYYY-MM-DD_HH-MM-SS.json.
+Compara la auditoría actual con una previa. Acciones: lista auditorías anteriores; solicita al usuario seleccionar una; comprueba si contiene JSON válido; compara dispositivos nuevos, dispositivos desaparecidos, puertos nuevos, puertos cerrados, cambios de fabricante y cambios de tipo de escaneo. Los resultados se guardan en `changes/changes_YYYY-MM-DD_HH-MM-SS.txt` y `changes/changes_YYYY-MM-DD_HH-MM-SS.json`.
 
 ### Block 8 — Generación de alertas
-Genera alertas basadas en los cambios detectados. Archivos: alertas/alertas_YYYY-MM-DD_HH-MM-SS.txt y alertas/alertas_YYYY-MM-DD_HH-MM-SS.json. Las alertas incluyen: dispositivos nuevos, dispositivos desaparecidos, puertos nuevos, puertos cerrados, cambios de fabricante y cambios de tipo de escaneo. El TXT incluye secciones como [ALERTA] Nuevo dispositivo: ... El JSON almacena la misma información de forma estructurada.
+Genera alertas basadas en los cambios detectados. Archivos: `alerts/alerts_YYYY-MM-DD_HH-MM-SS.txt` y `alerts/alerts_YYYY-MM-DD_HH-MM-SS.json`. Las alertas incluyen: dispositivos nuevos, dispositivos desaparecidos, puertos nuevos, puertos cerrados, cambios de fabricante y cambios de tipo de escaneo. El TXT incluye secciones como [ALERTA] Nuevo dispositivo: ... El JSON almacena la misma información de forma estructurada.
 
 ### Block 9 — Limpieza inteligente
 Pregunta si se deben limpiar auditorías antiguas. Si se confirma: conserva la auditoría actual, la inmediatamente anterior y la usada para comparación; elimina el resto. Objetivo: ahorrar espacio y mantener solo referencias relevantes. Registra las operaciones de limpieza en cleanup_YYYY-MM-DD_HH-MM-SS.log.
@@ -45,6 +45,7 @@ Bash, Nmap, arp-scan, jq, ip, grep, awk, sed, cut, xargs.
 Detectar dispositivos activos; determinar fabricantes; identificar puertos abiertos y servicios; documentar infraestructura con CSV/JSON; comparar auditorías; detectar cambios; generar alertas básicas de seguridad.
 
 ## Estructura final de salida
+```text
 ~/.network-audit/audits/
 └── YYYY-MM-DD_HH-MM-SS/
     ├── discovery/
@@ -57,6 +58,7 @@ Detectar dispositivos activos; determinar fabricantes; identificar puertos abier
     ├── reports/
     ├── logs/
     └── diagrams/
+```
 
 ## Limitaciones
 Depende de permisos del sistema y la red; requiere nmap, arp-scan y jq; la detección de fabricantes puede ser aproximada; la comparación requiere un JSON previo válido; la detección se basa en cadenas analizadas y heurísticas.
